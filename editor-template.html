@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pastel Hand-Drawn Photo · 文字编辑器</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #554f5d;
+      --muted: #8b8491;
+      --paper: #fbf9f7;
+      --panel: #fffdfb;
+      --line: #e9e2e8;
+      --accent: #a58bb9;
+      --accent-dark: #806994;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .topbar {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.82);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 38px; height: 38px; border-radius: 13px;
+      display: grid; place-items: center; background: #f0e8f4;
+      color: var(--accent-dark); font-size: 20px;
+    }
+    h1 { font-size: 16px; line-height: 1.2; margin: 0; font-weight: 650; }
+    .subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button, .file-button {
+      border: 1px solid var(--line); border-radius: 11px; padding: 10px 13px;
+      background: #fff; color: var(--ink); font: inherit; font-size: 13px;
+      cursor: pointer; transition: .15s ease;
+    }
+    button:hover, .file-button:hover { border-color: #cdbbd7; background: #fcf8ff; }
+    button.primary { color: white; border-color: var(--accent); background: var(--accent); }
+    button.primary:hover { background: var(--accent-dark); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .layout {
+      max-width: 1440px; margin: 0 auto; padding: 22px;
+      display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 20px;
+      align-items: start;
+    }
+    .workspace {
+      min-width: 0; padding: 18px; border-radius: 20px;
+      background: #f1edf0; border: 1px solid #ebe5eb;
+    }
+    .workspace-head {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; margin-bottom: 14px; color: var(--muted); font-size: 12px;
+    }
+    .stage-wrap { width: 100%; display: flex; justify-content: center; overflow: auto; }
+    #stage {
+      position: relative; width: min(100%, 760px); height: auto;
+      aspect-ratio: 2 / 3; overflow: hidden; flex: 0 0 auto;
+      background: linear-gradient(135deg, #fff, #f5eff7);
+      border-radius: 4px; box-shadow: 0 12px 40px rgba(74, 55, 81, .12);
+      touch-action: none;
+    }
+    #baseImage { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+    #textLayer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+    .text-object {
+      position: absolute; z-index: 2; left: 50%; top: 50%; pointer-events: auto;
+      transform: translate(-50%, -50%); white-space: pre-wrap;
+      line-height: 1.22; text-align: center; cursor: grab; user-select: none;
+      overflow-wrap: anywhere; padding: 3px 5px; border: 1px solid transparent;
+      paint-order: stroke fill; -webkit-text-stroke: var(--outline-width, 0px) var(--outline-color, transparent);
+      text-shadow: 0 1px 2px rgba(75, 60, 80, .13);
+    }
+    .text-object:active { cursor: grabbing; }
+    .text-object.selected { border: 1px dashed rgba(132, 105, 151, .8); border-radius: 6px; background: rgba(255,255,255,.10); }
+    .empty-state {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      padding: 28px; text-align: center; color: #8d8293; font-size: 14px;
+      line-height: 1.7; pointer-events: none;
+    }
+    .side-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+      padding: 17px; position: sticky; top: 16px;
+    }
+    .panel-title { font-size: 14px; font-weight: 650; margin: 0 0 4px; }
+    .panel-help { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0 0 16px; }
+    .field { margin: 14px 0; }
+    .field label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #6e6675; margin-bottom: 7px; }
+    textarea, select, input[type="text"] {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 11px; font: inherit; font-size: 13px; color: var(--ink);
+      background: #fff; outline: none;
+    }
+    textarea { min-height: 86px; resize: vertical; line-height: 1.55; }
+    textarea:focus, select:focus, input:focus { border-color: #b9a2c7; box-shadow: 0 0 0 3px rgba(165,139,185,.12); }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    input[type="color"] { width: 42px; height: 32px; padding: 2px; border: 1px solid var(--line); background: white; border-radius: 8px; }
+    .color-row { display: flex; align-items: center; gap: 10px; }
+    .color-value { font-size: 12px; color: var(--muted); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .button-row { display: flex; gap: 8px; }
+    .button-row > button { flex: 1; }
+    .divider { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+    .text-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 14px; }
+    .text-list button { text-align: left; padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .text-list button.active { border-color: #b9a2c7; background: #f7f0fa; }
+    .hint { font-size: 11px; line-height: 1.5; color: var(--muted); margin-top: 12px; }
+    .hidden { display: none !important; }
+    #fileInput, #projectInput { display: none; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; padding: 12px; }
+      .side-panel { position: static; }
+      .topbar { padding: 14px; align-items: flex-start; flex-direction: column; }
+      #stage { width: min(100%, 620px); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">✳</div>
+      <div>
+        <h1>Pastel Hand-Drawn Photo</h1>
+        <div class="subtitle">点击手写文字即可修改 · 拖动文字可调整位置</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <label class="file-button" for="fileInput">载入底图</label>
+      <input id="fileInput" type="file" accept="image/*">
+      <button id="projectExport">导出文字配置</button>
+      <button id="pngExport" class="primary">导出 PNG</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="workspace">
+      <div class="workspace-head">
+        <span id="imageInfo">作品预览</span>
+        <span>点击文字选中 · 拖动文字移动</span>
+      </div>
+      <div class="stage-wrap">
+        <div id="stage" aria-label="作品编辑画布">
+          <img id="baseImage" alt="手绘风格图片底图">
+          <div id="emptyState" class="empty-state">正在载入作品……</div>
+          <div id="textLayer"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <h2 class="panel-title">文字图层</h2>
+      <p class="panel-help">点击画面里的任意手写文字即可选中。你可以直接改字，也可以拖动画面中的文字调整位置。</p>
+      <div id="textList" class="text-list"></div>
+      <div class="button-row">
+        <button id="addText">＋ 添加文字</button>
+        <button id="deleteText" disabled>删除选中项</button>
+      </div>
+      <hr class="divider">
+      <div id="editorFields" class="hidden">
+        <div class="field">
+          <label for="textContent">文字内容</label>
+          <textarea id="textContent" placeholder="写下一句轻松的小日记"></textarea>
+        </div>
+        <div class="field">
+          <label for="fontFamily">手写字体</label>
+          <select id="fontFamily">
+            <option value="hand-cn">中文手写 / 楷体</option>
+            <option value="hand-en">英文手写 / 随性</option>
+            <option value="soft-serif">柔和衬线</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fontSize">字号 <span id="fontSizeValue">40 px</span></label>
+          <input id="fontSize" type="range" min="12" max="120" step="1" value="40">
+        </div>
+        <div class="field">
+          <label for="textColor">文字颜色</label>
+          <div class="color-row">
+            <input id="textColor" type="color" value="#ffffff">
+            <span id="colorValue" class="color-value">#FFFFFF</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rotation">旋转角度 <span id="rotationValue">0°</span></label>
+          <input id="rotation" type="range" min="-25" max="25" step="1" value="0">
+        </div>
+        <div class="field">
+          <label for="outlineWidth">描边强度 <span id="outlineValue">0.8 px</span></label>
+          <input id="outlineWidth" type="range" min="0" max="5" step="0.1" value="0.8">
+        </div>
+      </div>
+      <div id="noSelection" class="hint">还没有选中文字。先点击画面中的文字，或点击“添加文字”新建一条。</div>
+      <p class="hint">提示：字体取决于当前设备已安装的字体。导出 PNG 会按底图原始像素尺寸合成。</p>
+    </aside>
+  </main>
+
+  <script>
+    // build_editor.py 会把本次生成的底图和文案数据写入下方配置。
+    const CONFIG = {
+      imageDataUrl: "__IMAGE_DATA_URL__",
+      imageAlt: "__IMAGE_ALT__",
+      imageName: "__IMAGE_NAME__",
+      textItems: __TEXT_ITEMS__
+    };
+
+    const FONT_STACKS = {
+      "hand-cn": '"KaiTi", "STKaiti", "Kaiti SC", "楷体", "Segoe Print", "Comic Sans MS", cursive',
+      "hand-en": '"Segoe Print", "Bradley Hand", "Comic Sans MS", "KaiTi", cursive',
+      "soft-serif": '"Songti SC", "STSong", "Noto Serif CJK SC", serif'
+    };
+    const $ = (id) => document.getElementById(id);
+    const stage = $("stage");
+    const baseImage = $("baseImage");
+    const textLayer = $("textLayer");
+    const textItems = Array.isArray(CONFIG.textItems) ? CONFIG.textItems.map(normalizeItem) : [];
+    let selectedId = textItems[0]?.id || null;
+    let imageLoaded = false;
+    let objectUrl = null;
+    let dragState = null;
+
+    function normalizeItem(item, index) {
+      return {
+        id: String(item.id || `note-${index + 1}`),
+        text: String(item.text || "新的一点小快乐"),
+        x: clamp(Number(item.x ?? 0.5), 0.03, 0.97),
+        y: clamp(Number(item.y ?? 0.5), 0.03, 0.97),
+        fontSize: clamp(Number(item.fontSize ?? 40), 12, 240),
+        color: validColor(item.color) ? item.color : "#FFFFFF",
+        outlineColor: validColor(item.outlineColor) ? item.outlineColor : "#806994",
+        outlineWidth: clamp(Number(item.outlineWidth ?? 0.8), 0, 10),
+        rotation: clamp(Number(item.rotation ?? 0), -45, 45),
+        maxWidth: clamp(Number(item.maxWidth ?? 0.36), 0.12, 0.9),
+        fontFamily: Object.hasOwn(FONT_STACKS, item.fontFamily) ? item.fontFamily : "hand-cn"
+      };
+    }
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min)); }
+    function validColor(value) { return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value); }
+    function selectedItem() { return textItems.find(item => item.id === selectedId) || null; }
+
+    function setImage(src, name) {
+      imageLoaded = false;
+      $("emptyState").classList.remove("hidden");
+      $("emptyState").textContent = "正在载入底图……";
+      baseImage.onload = () => {
+        imageLoaded = true;
+        baseImage.alt = CONFIG.imageAlt || "手绘风格图片底图";
+        stage.style.aspectRatio = `${baseImage.naturalWidth} / ${baseImage.naturalHeight}`;
+        $("emptyState").classList.add("hidden");
+        $("imageInfo").textContent = `${name || "作品预览"} · ${baseImage.naturalWidth} × ${baseImage.naturalHeight}px`;
+        renderAll();
+      };
+      baseImage.onerror = () => {
+        imageLoaded = false;
+        $("emptyState").classList.remove("hidden");
+        $("emptyState").textContent = "底图载入失败，请重新选择一张图片。";
+      };
+      baseImage.src = src;
+    }
+
+    function renderAll() {
+      renderTextObjects();
+      renderTextList();
+      renderControls();
+    }
+
+    function renderTextObjects() {
+      textLayer.innerHTML = "";
+      if (!imageLoaded) return;
+      const scale = stage.clientWidth / baseImage.naturalWidth;
+      textItems.forEach(item => {
+        const el = document.createElement("div");
+        el.className = "text-object" + (item.id === selectedId ? " selected" : "");
+        el.dataset.id = item.id;
+        el.textContent = item.text;
+        el.style.left = `${item.x * 100}%`;
+        el.style.top = `${item.y * 100}%`;
+        el.style.transform = `translate(-50%, -50%) rotate(${item.rotation}deg)`;
+        el.style.width = `${item.maxWidth * 100}%`;
+        el.style.fontSize = `${item.fontSize * scale}px`;
+        el.style.fontFamily = FONT_STACKS[item.fontFamily] || FONT_STACKS["hand-cn"];
+        el.style.color = item.color;
+        el.style.setProperty("--outline-width", `${item.outlineWidth * scale}px`);
+        el.style.setProperty("--outline-color", item.outlineColor);
+        el.addEventListener("click", event => {
+          event.stopPropagation();
+          selectedId = item.id;
+          renderAll();
+        });
+        el.addEventListener("pointerdown", event => startDrag(event, item.id, el));
+        textLayer.appendChild(el);
+      });
+    }
+
+    function renderTextList() {
+      const list = $("textList");
+      list.innerHTML = "";
+      if (!textItems.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "暂无文字图层";
+        list.appendChild(empty);
+      }
+      textItems.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = item.id === selectedId ? "active" : "";
+        button.textContent = `${index + 1}. ${item.text.replace(/\n/g, " ") || "（空白文字）"}`;
+        button.addEventListener("click", () => { selectedId = item.id; renderAll(); });
+        list.appendChild(button);
+      });
+    }
+
+    function renderControls() {
+      const item = selectedItem();
+      $("editorFields").classList.toggle("hidden", !item);
+      $("noSelection").classList.toggle("hidden", !!item);
+      $("deleteText").disabled = !item;
+      if (!item) return;
+      $("textContent").value = item.text;
+      $("fontFamily").value = item.fontFamily;
+      $("fontSize").value = item.fontSize;
+      $("fontSizeValue").textContent = `${item.fontSize} px`;
+      $("textColor").value = item.color;
+      $("colorValue").textContent = item.color.toUpperCase();
+      $("rotation").value = item.rotation;
+      $("rotationValue").textContent = `${item.rotation}°`;
+      $("outlineWidth").value = item.outlineWidth;
+      $("outlineValue").textContent = `${item.outlineWidth.toFixed(1)} px`;
+    }
+
+    function updateSelected(key, value) {
+      const item = selectedItem();
+      if (!item) return;
+      item[key] = value;
+      renderTextObjects();
+      if (key === "text") renderTextList();
+      if (key === "fontSize") $("fontSizeValue").textContent = `${value} px`;
+      if (key === "color") $("colorValue").textContent = value.toUpperCase();
+      if (key === "rotation") $("rotationValue").textContent = `${value}°`;
+      if (key === "outlineWidth") $("outlineValue").textContent = `${Number(value).toFixed(1)} px`;
+    }
+
+    function startDrag(event, id, element) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectedId = id;
+      const item = textItems.find(row => row.id === id);
+      const rect = stage.getBoundingClientRect();
+      dragState = { id, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, width: rect.width, height: rect.height };
+      stage.setPointerCapture?.(event.pointerId);
+      textLayer.querySelectorAll(".text-object").forEach(node => node.classList.toggle("selected", node.dataset.id === id));
+      renderTextList();
+      renderControls();
+    }
+    window.addEventListener("pointermove", event => {
+      if (!dragState) return;
+      const item = textItems.find(row => row.id === dragState.id);
+      if (!item) return;
+      item.x = clamp(dragState.x + (event.clientX - dragState.startX) / dragState.width, 0.03, 0.97);
+      item.y = clamp(dragState.y + (event.clientY - dragState.startY) / dragState.height, 0.03, 0.97);
+      renderTextObjects();
+    });
+    window.addEventListener("pointerup", () => { dragState = null; });
+
+    $("textContent").addEventListener("input", event => updateSelected("text", event.target.value));
+    $("fontFamily").addEventListener("change", event => updateSelected("fontFamily", event.target.value));
+    $("fontSize").addEventListener("input", event => updateSelected("fontSize", Number(event.target.value)));
+    $("textColor").addEventListener("input", event => updateSelected("color", event.target.value));
+    $("rotation").addEventListener("input", event => updateSelected("rotation", Number(event.target.value)));
+    $("outlineWidth").addEventListener("input", event => updateSelected("outlineWidth", Number(event.target.value)));
+
+    $("addText").addEventListener("click", () => {
+      if (!imageLoaded) { $("fileInput").click(); return; }
+      const id = `note-${Date.now()}`;
+      textItems.push(normalizeItem({
+        id, text: "写下一点小快乐", x: 0.5, y: 0.5,
+        fontSize: Math.max(24, Math.round(baseImage.naturalWidth * 0.045)),
+        color: "#FFFFFF", outlineColor: "#8F7BA3", outlineWidth: 0.8,
+        rotation: -4, maxWidth: 0.42, fontFamily: "hand-cn"
+      }, textItems.length));
+      selectedId = id;
+      renderAll();
+      $("textContent").focus();
+      $("textContent").select();
+    });
+    $("deleteText").addEventListener("click", () => {
+      if (!selectedId) return;
+      const index = textItems.findIndex(item => item.id === selectedId);
+      if (index >= 0) textItems.splice(index, 1);
+      selectedId = textItems[Math.min(index, textItems.length - 1)]?.id || null;
+      renderAll();
+    });
+
+    $("fileInput").addEventListener("change", event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(file);
+      setImage(objectUrl, file.name);
+    });
+
+    function wrapLines(ctx, text, maxWidth) {
+      const paragraphs = String(text).split("\n");
+      const lines = [];
+      for (const paragraph of paragraphs) {
+        if (!paragraph) { lines.push(""); continue; }
+        const words = paragraph.split(/(\s+)/).filter(Boolean);
+        let line = "";
+        for (const word of words) {
+          const candidate = line + word;
+          if (ctx.measureText(candidate).width <= maxWidth || !line) {
+            if (ctx.measureText(candidate).width <= maxWidth) line = candidate;
+            else {
+              let fragment = "";
+              for (const char of Array.from(candidate)) {
+                if (fragment && ctx.measureText(fragment + char).width > maxWidth) {
+                  lines.push(fragment);
+                  fragment = char;
+                } else fragment += char;
+              }
+              line = fragment;
+            }
+          } else {
+            lines.push(line.trimEnd());
+            line = word.trimStart();
+          }
+        }
+        if (line) lines.push(line.trimEnd());
+      }
+      return lines.length ? lines : [""];
+    }
+
+    function exportPng() {
+      if (!imageLoaded) {
+        alert("请先载入底图。若这是本次生成的编辑器，底图通常会自动载入。");
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = baseImage.naturalWidth;
+      canvas.height = baseImage.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+
+      textItems.forEach(item => {
+        const x = item.x * canvas.width;
+        const y = item.y * canvas.height;
+        const maxWidth = item.maxWidth * canvas.width;
+        const fontFamily = FONT_STACKS[item.fontFamily] || FONT_STACKS["hand-cn"];
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(item.rotation * Math.PI / 180);
+        ctx.font = `${item.fontSize}px ${fontFamily}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = item.outlineWidth;
+        ctx.strokeStyle = item.outlineColor;
+        ctx.fillStyle = item.color;
+        ctx.shadowColor = "rgba(75, 60, 80, .13)";
+        ctx.shadowBlur = Math.max(1, item.fontSize * 0.035);
+        ctx.shadowOffsetY = Math.max(1, item.fontSize * 0.025);
+        const lines = wrapLines(ctx, item.text, maxWidth);
+        const lineHeight = item.fontSize * 1.22;
+        const startY = -((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((line, index) => {
+          const lineY = startY + index * lineHeight;
+          if (item.outlineWidth > 0) ctx.strokeText(line, 0, lineY, maxWidth);
+          ctx.fillText(line, 0, lineY, maxWidth);
+        });
+        ctx.restore();
+      });
+
+      canvas.toBlob(blob => {
+        if (!blob) { alert("导出失败，请换用最新版 Chrome、Edge 或 Safari 再试。"); return; }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = (CONFIG.imageName || "pastel-handdrawn-photo").replace(/\.[^.]+$/, "") + "-edited.png";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+      }, "image/png");
+    }
+    $("pngExport").addEventListener("click", exportPng);
+
+    $("projectExport").addEventListener("click", () => {
+      const payload = { version: 1, imageName: CONFIG.imageName, textItems };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "pastel-handdrawn-text-items.json";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    stage.addEventListener("click", event => {
+      if (event.target === stage || event.target === baseImage || event.target === textLayer) {
+        selectedId = null;
+        renderAll();
+      }
+    });
+    window.addEventListener("resize", () => renderTextObjects());
+
+    if (CONFIG.imageDataUrl && !CONFIG.imageDataUrl.startsWith("__IMAGE_")) {
+      setImage(CONFIG.imageDataUrl, CONFIG.imageName || "作品底图");
+    } else {
+      $("emptyState").textContent = "请点击右上角「载入底图」，选择一张无新增文案的手绘底图。";
+      selectedId = null;
+      renderAll();
+    }
+  </script>
+</body>
+</html>
